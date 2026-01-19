@@ -1,0 +1,31 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: oneview-pagerduty-bridge
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: oneview-pagerduty-bridge
+    environment: production
+    team: platform-engineering
+spec:
+  project: default
+  sources:
+    - repoURL: https://github.com/YOUR_USERNAME/hponeview-pagerduty-bridge
+      targetRevision: main
+      path: helm
+      helm:
+        valueFiles:
+        - $values/environments/production/values.yaml
+    - ref: values
+      repoURL: https://github.com/YOUR_USERNAME/hponeview-pagerduty-bridge
+      targetRevision: main
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: oneview-bridge
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=true

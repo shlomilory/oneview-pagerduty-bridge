@@ -1,0 +1,26 @@
+apiVersion: v2
+name: hponeview-pagerduty-bridge
+description: Production-grade Kubernetes application for routing HP OneView infrastructure alerts to PagerDuty
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+home: https://github.com/YOUR_USERNAME/hponeview-pagerduty-bridge
+icon: https://raw.githubusercontent.com/pagerduty/brand-assets/main/assets/logos/pagerduty-logo-green.png
+sources:
+  - https://github.com/YOUR_USERNAME/hponeview-pagerduty-bridge
+maintainers:
+  - name: Platform Engineering Team
+    email: devops-team@example.com
+keywords:
+  - oneview
+  - hpe
+  - pagerduty
+  - alerting
+  - vault
+  - monitoring
+  - kubernetes
+  - gitops
+  - helm
+annotations:
+  category: Infrastructure
+  licenses: MIT

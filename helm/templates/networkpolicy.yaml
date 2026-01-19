@@ -1,0 +1,92 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "oneview-pagerduty-bridge.fullname" . }}-web-netpol
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "oneview-pagerduty-bridge.labels" . | nindent 4 }}
+    component: security
+    policy-for: web
+    {{- with .Values.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "oneview-pagerduty-bridge.selectorLabels" . | nindent 6 }}
+      component: web
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  {{- with .Values.networkPolicy.ingress }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+  egress:
+  {{- with .Values.networkPolicy.egress }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "oneview-pagerduty-bridge.fullname" . }}-poller-netpol
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "oneview-pagerduty-bridge.labels" . | nindent 4 }}
+    component: security
+    policy-for: poller
+    {{- with .Values.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "oneview-pagerduty-bridge.selectorLabels" . | nindent 6 }}
+      component: poller
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from prometheus for monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+    ports:
+    - protocol: TCP
+      port: {{ .Values.config.port }}
+  
+  # FIXED: Allow ingress from web pods within same namespace
+  - from:
+    - podSelector:
+        matchLabels:
+          {{- include "oneview-pagerduty-bridge.selectorLabels" . | nindent 10 }}
+          component: web
+    ports:
+    - protocol: TCP
+      port: {{ .Values.config.port }}
+  
+  # Allow ingress from all pods within the app
+  - from:
+    - podSelector:
+        matchLabels:
+          {{- include "oneview-pagerduty-bridge.selectorLabels" . | nindent 10 }}
+    ports:
+    - protocol: TCP
+      port: {{ .Values.config.port }}
+  egress:
+  {{- with .Values.networkPolicy.egress }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+{{- end }}

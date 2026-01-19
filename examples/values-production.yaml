@@ -1,0 +1,425 @@
+# Production values for oneview-pagerduty-bridge
+# Enterprise-grade configuration with Contour HTTPProxy and security hardening
+
+# Global configuration
+global:
+  imageRegistry: ""
+
+## Container image configuration
+image:
+  registry: "your-registry.example.com"
+  repository: "hponeview-bridge"
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+# Application configuration
+config:
+  port: 5000
+  logLevel: "info"
+  pollInterval: 180
+  
+  gunicorn:
+    workers: 4
+    maxRequests: 500
+    maxRequestsJitter: 25
+    timeout: 60
+
+# Deployment configuration
+deployment:
+  web:
+    enabled: true
+    replicaCount: 3
+    annotations:
+      app.example.com/app-name: "OneView"
+      app.example.com/team-name: "Platform"
+      app.example.com/domain-name: "infrastructure"
+    
+    env:
+      GUNICORN_MAIN_PROCESS: "false"
+    
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "200m"
+      limits:
+        memory: "1Gi"
+    
+    livenessProbe:
+      enabled: true
+      httpGet:
+        path: /health
+        port: 5000
+      initialDelaySeconds: 45
+      periodSeconds: 30
+      timeoutSeconds: 10
+      failureThreshold: 3
+    
+    readinessProbe:
+      enabled: true
+      httpGet:
+        path: /ready
+        port: 5000
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 2
+  
+  poller:
+    enabled: true
+    replicaCount: 1
+    annotations:
+      app.example.com/app-name: "OneView"
+      app.example.com/team-name: "Platform"
+      app.example.com/domain-name: "infrastructure"
+    
+    env:
+      GUNICORN_MAIN_PROCESS: "true"
+      GUNICORN_WORKERS: "1"
+    
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "300m"
+      limits:
+        memory: "2Gi"
+    
+    livenessProbe:
+      enabled: true
+      httpGet:
+        path: /health
+        port: 5000
+      initialDelaySeconds: 45
+      periodSeconds: 30
+      timeoutSeconds: 10
+      failureThreshold: 3
+    
+    readinessProbe:
+      enabled: true
+      httpGet:
+        path: /ready
+        port: 5000
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 2
+
+# ServiceAccount configuration
+serviceAccount:
+  create: true
+  name: "oneview-pagerduty-bridge"
+  annotations:
+    vault.hashicorp.com/role: "vault-role"
+  automount: true
+
+# Service configuration
+service:
+  web:
+    enabled: true
+    type: ClusterIP
+    port: 80
+    targetPort: 5000
+  
+  poller:
+    enabled: true
+    type: ClusterIP
+    port: 80
+    targetPort: 5000
+
+## HTTPProxy configuration (Contour)
+httpproxy:
+  enabled: true
+  fqdn: "oneview-bridge.example.com"
+  
+  timeoutPolicy:
+    response: 60s
+    idle: 60s
+  
+  retryPolicy:
+    count: 3
+    perTryTimeout: 15s
+    retryOn:
+      - 5xx
+      - reset
+      - connect-failure
+      - retriable-4xx
+  
+  rateLimitPolicy:
+    local:
+      requests: 50
+      unit: minute
+      burst: 10
+  
+  loadBalancerPolicy:
+    strategy: WeightedLeastRequest
+  
+  requestHeadersPolicy:
+    set:
+      - name: X-Forwarded-Proto
+        value: http
+      - name: X-App-Name
+        value: oneview-pagerduty-bridge
+  
+  responseHeadersPolicy:
+    set:
+      - name: X-Content-Type-Options
+        value: nosniff
+      - name: X-Frame-Options
+        value: DENY
+      - name: X-XSS-Protection
+        value: "1; mode=block"
+
+# Ingress DISABLED (using HTTPProxy instead)
+ingress:
+  enabled: false
+
+# External Secrets configuration
+externalSecrets:
+  enabled: true
+  
+  # SecretStore configuration
+  secretStore:
+    enabled: true
+    name: vault-secretstore
+    vault:
+      server: "http://vault.vault:8200"
+      path: "secret"
+      version: "v2"
+      auth:
+        method: "kubernetes"
+        kubernetes:
+          mountPath: "kubernetes"
+          role: "vault-role"
+
+  # ExternalSecret configuration
+  externalSecret:
+    enabled: true
+    name: oneview-pagerduty-secrets
+    refreshInterval: "1h"
+    secretName: oneview-pagerduty-secrets
+    data:
+      - secretKey: PAGERDUTY_ROUTING_KEY
+        remoteRef:
+          key: apps/oneview-pagerduty-bridge
+          property: PAGERDUTY_ROUTING_KEY
+      - secretKey: ONEVIEW_HOST
+        remoteRef:
+          key: apps/oneview-pagerduty-bridge
+          property: ONEVIEW_HOST
+      - secretKey: ONEVIEW_USERNAME
+        remoteRef:
+          key: apps/oneview-pagerduty-bridge
+          property: ONEVIEW_USERNAME
+      - secretKey: ONEVIEW_PASSWORD
+        remoteRef:
+          key: apps/oneview-pagerduty-bridge
+          property: ONEVIEW_PASSWORD
+      - secretKey: POLL_INTERVAL
+        remoteRef:
+          key: apps/oneview-pagerduty-bridge
+          property: POLL_INTERVAL
+
+# Network Policy - Zero-trust security
+networkPolicy:
+  enabled: true
+  
+  ingress:
+    # Allow from ingress controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-system
+        - podSelector:
+            matchLabels:
+              app: ingress-controller
+      ports:
+        - protocol: TCP
+          port: 5000
+    
+    # Allow from Prometheus monitoring
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+        - podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - protocol: TCP
+          port: 5000
+    
+    # CRITICAL: Allow all pods within the same app to communicate
+    # This allows web pods to call poller pods
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: hponeview-pagerduty-bridge
+      ports:
+        - protocol: TCP
+          port: 5000
+    
+    # Additional rule: Explicitly allow web component to reach poller
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: hponeview-pagerduty-bridge
+              component: web
+      ports:
+        - protocol: TCP
+          port: 5000
+  
+  egress:
+    # DNS resolution (required for service discovery)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    
+    # Vault access for secrets
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: vault
+      ports:
+        - protocol: TCP
+          port: 8200
+    
+    # External HTTPS (OneView API, PagerDuty API)
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+    
+    # CRITICAL: Allow web pods to reach poller SERVICE (port 80)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: hponeview-pagerduty-bridge
+              component: poller
+      ports:
+        - protocol: TCP
+          port: 80
+    
+    # CRITICAL: Allow web pods to reach poller CONTAINER (port 5000)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: hponeview-pagerduty-bridge
+              component: poller
+      ports:
+        - protocol: TCP
+          port: 5000
+
+# Monitoring configuration
+monitoring:
+  serviceMonitor:
+    enabled: true
+    namespace: "monitoring"
+    interval: 15s
+    scrapeTimeout: 10s
+    path: "/metrics"
+    labels:
+      team: platform
+      environment: production
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# Horizontal Pod Autoscaler
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      - type: Pods
+        value: 1
+        periodSeconds: 60
+      selectPolicy: Min
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 30
+      - type: Pods
+        value: 1
+        periodSeconds: 30
+      selectPolicy: Min
+
+# Node selection (optional - customize for your cluster)
+nodeSelector: {}
+  # Example: Select specific node pool
+  # node-role.kubernetes.io/worker: ""
+
+# Tolerations (optional - customize for your cluster)
+tolerations: []
+  # Example: Tolerate specific taints
+  # - key: "dedicated"
+  #   operator: "Equal"
+  #   value: "monitoring"
+  #   effect: "NoSchedule"
+
+# Affinity rules - Spread pods across nodes for HA
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - hponeview-pagerduty-bridge
+        topologyKey: kubernetes.io/hostname
+
+# Labels
+labels:
+  environment: "production"
+  team: "platform"
+  managed-by: "helm"
+
+# Annotations
+annotations:
+  deployment.kubernetes.io/revision: "1"
+  kubernetes.io/change-cause: "Production deployment with Contour HTTPProxy and zero-trust NetworkPolicy"
+
+# Namespace configuration
+namespace:
+  create: true
+  name: "oneview-bridge"
+  labels:
+    name: "oneview-bridge"
+    app.kubernetes.io/name: "oneview-pagerduty-bridge"
+    app.kubernetes.io/component: "infrastructure"
+    environment: "production"
+    team: "platform"
+
+# RBAC configuration - Least privilege
+rbac:
+  create: true
+  rules:
+    - apiGroups: [""]
+      resources: ["pods"]
+      verbs: ["get", "list"]
+    - apiGroups: ["external-secrets.io"]
+      resources: ["externalsecrets", "secretstores"]
+      verbs: ["get", "list"]
+    - apiGroups: [""]
+      resources: ["secrets"]
+      verbs: ["get", "list"]

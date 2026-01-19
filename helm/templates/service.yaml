@@ -1,0 +1,70 @@
+{{- if .Values.service.web.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "oneview-pagerduty-bridge.fullname" . }}-web
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "oneview-pagerduty-bridge.labels" . | nindent 4 }}
+    component: service
+    service-type: web
+    {{- with .Values.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- with .Values.service.web.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.service.web.annotations }}
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.web.type }}
+  ports:
+  - port: {{ .Values.service.web.port }}
+    targetPort: {{ .Values.service.web.targetPort }}
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "oneview-pagerduty-bridge.selectorLabels" . | nindent 4 }}
+    component: web
+{{- end }}
+
+---
+{{- if .Values.service.poller.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "oneview-pagerduty-bridge.fullname" . }}-poller
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "oneview-pagerduty-bridge.labels" . | nindent 4 }}
+    component: service
+    service-type: poller
+    {{- with .Values.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- with .Values.service.poller.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.service.poller.annotations }}
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.poller.type }}
+  ports:
+  - port: {{ .Values.service.poller.port }}
+    targetPort: {{ .Values.service.poller.targetPort }}
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "oneview-pagerduty-bridge.selectorLabels" . | nindent 4 }}
+    component: poller
+{{- end }}

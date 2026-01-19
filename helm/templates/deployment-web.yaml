@@ -1,0 +1,112 @@
+{{- if .Values.deployment.web.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "oneview-pagerduty-bridge.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "oneview-pagerduty-bridge.labels" . | nindent 4 }}
+    component: web
+    {{- with .Values.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- with .Values.deployment.web.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  annotations:
+  {{- with .Values.annotations }}
+  {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.deployment.web.annotations }}
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.deployment.web.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "oneview-pagerduty-bridge.selectorLabels" . | nindent 6 }}
+      component: web
+  template:
+    metadata:
+      labels:
+        {{- include "oneview-pagerduty-bridge.selectorLabels" . | nindent 8 }}
+        component: web
+        {{- with .Values.labels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- with .Values.deployment.web.labels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.config.port | quote }}
+        prometheus.io/path: "/metrics"
+        {{- with .Values.annotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- with .Values.deployment.web.annotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "oneview-pagerduty-bridge.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      containers:
+      - name: {{ .Chart.Name }}
+        image: {{ include "oneview-pagerduty-bridge.image" . }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.config.port }}
+          protocol: TCP
+        env:
+        {{- range $key, $value := .Values.deployment.web.env }}
+        - name: {{ $key }}
+          value: {{ $value | quote }}
+        {{- end }}
+        envFrom:
+        - configMapRef:
+            name: {{ include "oneview-pagerduty-bridge.fullname" . }}-config
+        {{- if .Values.externalSecrets.enabled }}
+        - secretRef:
+            name: {{ .Values.externalSecrets.externalSecret.secretName }}
+            optional: true
+        {{- end }}
+        resources:
+          {{- toYaml .Values.deployment.web.resources | nindent 10 }}
+        {{- if .Values.deployment.web.livenessProbe.enabled }}
+        livenessProbe:
+          {{- omit .Values.deployment.web.livenessProbe "enabled" | toYaml | nindent 10 }}
+        {{- end }}
+        {{- if .Values.deployment.web.readinessProbe.enabled }}
+        readinessProbe:
+          {{- omit .Values.deployment.web.readinessProbe "enabled" | toYaml | nindent 10 }}
+        {{- end }}
+        securityContext:
+          {{- toYaml .Values.podSecurityContext | nindent 10 }}
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir:
+          sizeLimit: 100Mi
+      nodeSelector:
+      {{- with .Values.nodeSelector }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      affinity:
+      {{- with .Values.affinity }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      tolerations:
+      {{- with .Values.tolerations }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      imagePullSecrets:
+            {{- with .Values.image.pullSecrets }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+{{- end }}
