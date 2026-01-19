@@ -478,11 +478,9 @@ Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for de
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 👥 Authors
+## 👥 Author
 
-**Platform Engineering Team**
-
-Built as a portfolio project to demonstrate production-grade Kubernetes and DevOps practices.
+Shlomi Lory | DevOps Engineer 
 
 ## 🙏 Acknowledgments
 

@@ -22,9 +22,9 @@ This project serves as:
 
 ### Our Pledge
 
-We are committed to providing a welcoming and inspiring community for all. Please be respectful of differing viewpoints and experiences.
+I am committed to providing a welcoming and inspiring community for all. Please be respectful of differing viewpoints and experiences.
 
-### Our Standards
+### My Standards
 
 - **Be respectful** and professional
 - **Be constructive** in feedback
@@ -411,7 +411,7 @@ Follow [Semantic Versioning](https://semver.org/):
 Contributors will be acknowledged in:
 - README.md
 - Release notes
-- CONTRIBUTORS.md (if we create one)
+- CONTRIBUTORS.md (if I create one)
 
 ## 📋 Development Tips
 
